@@ -1,0 +1,51 @@
+pipeline {
+    agent {
+        label 'build-agent-1' 
+    }
+    options {
+        timestamps()  // 启用时间戳记录
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                git url: 'https://github.com/spring-projects/spring-petclinic.git', branch: 'main'
+            }
+        }
+        stage('Build') {
+            steps {
+                sh './mvnw clean package -DskipTests'
+            }
+        }
+        stage('Deploy') {
+            steps {
+                sh '''
+                    if [ -f petclinic.pid ]; then
+                        kill $(cat petclinic.pid) || true
+                        rm petclinic.pid
+                    fi
+                    nohup java -jar target/*.jar --server.port=8085 > petclinic.log 2>&1 &
+                    echo $! > petclinic.pid
+                    echo "PetClinicPID: $(cat petclinic.pid)"
+                '''
+            }
+        }
+        stage('Verify Deployment') {
+            steps {
+                sh '''
+                    echo "wait..."
+                    sleep 30
+                    curl -s http://localhost:8085/actuator/health || echo "failure"
+                    echo "success"
+                '''
+            }
+        }
+    }
+    post {
+        success {
+            echo "PetClinic success，在http://localhost:8085"
+        }
+        failure {
+            echo "PetClinic fail"
+        }
+    }
+}
