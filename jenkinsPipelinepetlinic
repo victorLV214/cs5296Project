@@ -3,20 +3,20 @@ pipeline {
         label 'build-agent-1' 
     }
     options {
-        timestamps()  // 启用时间戳记录
+        timestamps()
     }
     stages {
-        stage('Checkout') {
+        stage('git') {
             steps {
                 git url: 'https://github.com/spring-projects/spring-petclinic.git', branch: 'main'
             }
         }
-        stage('Build') {
+        stage('build') {
             steps {
                 sh './mvnw clean package -DskipTests'
             }
         }
-        stage('Deploy') {
+        stage('deployment') {
             steps {
                 sh '''
                     if [ -f petclinic.pid ]; then
@@ -24,17 +24,15 @@ pipeline {
                         rm petclinic.pid
                     fi
                     nohup java -jar target/*.jar --server.port=8085 > petclinic.log 2>&1 &
-                    echo $! > petclinic.pid
-                    echo "PetClinicPID: $(cat petclinic.pid)"
                 '''
             }
         }
-        stage('Verify Deployment') {
+        stage('V') {
             steps {
                 sh '''
-                    echo "wait..."
-                    sleep 30
-                    curl -s http://localhost:8085/actuator/health || echo "failure"
+                    echo "V"
+                    sleep 60
+                    curl -s http://localhost:8085/actuator/health || echo "error!!!!!"
                     echo "success"
                 '''
             }
@@ -42,7 +40,7 @@ pipeline {
     }
     post {
         success {
-            echo "PetClinic success，在http://localhost:8085"
+            echo "PetClinic success，http://localhost:8085"
         }
         failure {
             echo "PetClinic fail"

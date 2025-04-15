@@ -1,0 +1,54 @@
+pipeline {
+    agent {
+        label 'build-agent-1' 
+    }
+    options {
+        timestamps()
+    }
+    stages {
+        stage('git') {
+            steps {
+                git url: 'https://github.com/apache/openmeetings.git', branch: 'master'
+            }
+        }
+        stage('build') {
+            steps {
+                     sh 'mvn clean install -DskipTests'
+            }
+        }
+        stage('deployment') {
+            steps {
+                sh '''
+                    if [ -f openmeetings.pid ]; then
+                        kill $(cat openmeetings.pid) || true
+                        rm openmeetings.pid
+                    fi
+                    cd openmeetings-server/target
+                    unzip apache-openmeetings-*-SNAPSHOT.zip
+                    cd apache-openmeetings-*-SNAPSHOT
+                    nohup ./bin/startup.sh > ../../../openmeetings.log 2>&1 &
+                    echo $! > ../../../openmeetings.pid
+                    echo "OpenMeetings PID: $(cat ../../../openmeetings.pid)"
+                '''
+            }
+        }
+        stage('V') {
+            steps {
+                sh '''
+                    echo "V"
+                    sleep 120
+                    curl -s http://localhost:5080 || echo "error!!!!!"
+                    echo "success"
+                '''
+            }
+        }
+    }
+    post {
+        success {
+            echo "success，http://localhost:5080"
+        }
+        failure {
+            echo "fail"
+        }
+    }
+}
