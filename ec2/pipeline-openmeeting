@@ -1,0 +1,77 @@
+pipeline {
+    agent {
+        label 'build-agent-1'
+    }
+    options {
+        timestamps()
+    }
+
+    stages {
+        stage('Record Start Time') {
+            steps {
+                script {
+                    def buildStart = System.currentTimeMillis()
+                    echo "🕒 BUILD_START_MS = ${buildStart}"
+                }
+            }
+        }
+
+        stage('Git') {
+            steps {
+                git url: 'https://github.com/apache/openmeetings.git', branch: 'master'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'mvn clean install -DskipTests'
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                sh '''
+                    if [ -f openmeetings.pid ]; then
+                        kill $(cat openmeetings.pid) || true
+                        rm openmeetings.pid
+                    fi
+                    cd openmeetings-server/target
+                    unzip apache-openmeetings-*-SNAPSHOT.zip
+                    cd apache-openmeetings-*-SNAPSHOT
+                    nohup ./bin/startup.sh > ../../../openmeetings.log 2>&1 &
+                    echo $! > ../../../openmeetings.pid
+                    echo "OpenMeetings PID: $(cat ../../../openmeetings.pid)"
+                '''
+            }
+        }
+
+        stage('Verify') {
+            steps {
+                sh '''
+                    echo "verifying..."
+                    sleep 120
+                    curl -s http://localhost:5080 || echo "failed to verify"
+                    echo "success"
+                '''
+            }
+        }
+
+        stage('Record End Time') {
+            steps {
+                script {
+                    def buildEnd = System.currentTimeMillis()
+                    echo "🕒 BUILD_END_MS = ${buildEnd}"
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Build succeeded: http://localhost:5080"
+        }
+        failure {
+            echo "❌ Build failed"
+        }
+    }
+}

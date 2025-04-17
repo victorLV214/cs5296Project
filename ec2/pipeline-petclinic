@@ -1,0 +1,72 @@
+pipeline {
+    agent {
+        label 'build-agent-1'
+    }
+    options {
+        timestamps()
+    }
+
+    stages {
+        stage('Record Start Time') {
+            steps {
+                script {
+                    def buildStart = System.currentTimeMillis()
+                    echo "🕒 BUILD_START_MS = ${buildStart}"
+                }
+            }
+        }
+
+        stage('Git') {
+            steps {
+                git url: 'https://github.com/spring-projects/spring-petclinic.git', branch: 'main'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh './mvnw clean package -DskipTests'
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                sh '''
+                    if [ -f petclinic.pid ]; then
+                        kill $(cat petclinic.pid) || true
+                        rm petclinic.pid
+                    fi
+                    nohup java -jar target/*.jar --server.port=8085 > petclinic.log 2>&1 &
+                '''
+            }
+        }
+
+        stage('Verify') {
+            steps {
+                sh '''
+                    echo "verifying"
+                    sleep 60
+                    curl -s http://localhost:8085/actuator/health || echo "fail to verify"
+                    echo "success"
+                '''
+            }
+        }
+
+        stage('Record End Time') {
+            steps {
+                script {
+                    def buildEnd = System.currentTimeMillis()
+                    echo "🕒 BUILD_END_MS = ${buildEnd}"
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ PetClinic build succeeded: http://localhost:8085"
+        }
+        failure {
+            echo "❌ PetClinic build failed"
+        }
+    }
+}
